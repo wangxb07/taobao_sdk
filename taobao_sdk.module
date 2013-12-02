@@ -1,0 +1,202 @@
+<?php
+
+/**
+ * @file
+ */
+
+/**
+ * Implements hook_menu()
+ */
+function taobao_sdk_menu() {
+  $items = array();
+
+  $items['taobao_sdk/callback'] = array(
+    'title' => 'Taobao SDK callback',
+    'page callback' => 'taobao_sdk_callback',
+    'page arguments' => array(),
+    'access callback' => TRUE,
+  );
+
+  $items['taobao_sdk/settings'] = array(
+    'title' => 'Taobao SDK Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('taobao_sdk_settings_form'),
+    'access callback' => TRUE,
+  );
+
+  return $items;
+}
+
+/**
+ * Menu page callback: taobao sdk settings form.
+ */
+function taobao_sdk_settings_form($form, &$form_state) {
+  $form = array();
+
+  $form['taobao_sdk_appkey'] = array(
+    '#title' => 'APP Key',
+    '#description' => 'app key for open taobao application',
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#default_value' => variable_get('taobao_sdk_appkey', '')
+  );
+
+  $form['taobao_sdk_appsecret'] = array(
+    '#title' => 'APP Secret',
+    '#description' => 'app secret for open taobao application',
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#default_value' => variable_get('taobao_sdk_appsecret', '')
+  );
+
+  return system_settings_form($form);
+}
+
+function taobao_sdk_form_taobao_sdk_settings_form_alter(&$form, &$form_state, $form_id) {
+  $form['#submit'][] = 'taobao_sdk_flush_session';
+}
+
+function taobao_sdk_flush_session($form, &$form_state) {
+  variable_del('taobao_sdk_session');
+  taobao_sdk_session(array(
+      'appkey' => $form_state['values']['taobao_sdk_appkey']
+    ));
+}
+
+/**
+ * menu package callback: taobao api callback
+ */
+function taobao_sdk_callback() {
+  if (isset($_GET['top_session'])) {
+    variable_set('taobao_sdk_session', $_GET['top_session']);
+    drupal_goto($_SESSION['return_path']);
+  }
+  return array(
+    'message' => array(
+      '#markup' => 'callback page',
+    )
+  );
+}
+
+/**
+ * Receive API information by api name.
+ */
+function taobao_sdk_api_info($apiname) {
+  $list = taobao_sdk_api_info_list();
+  if (isset($list[$apiname])) {
+    return $list[$apiname];
+  }
+  return FALSE;
+}
+
+/**
+ * Receive all API informations
+ */
+function taobao_sdk_api_info_list() {
+  $list = &drupal_static(__FUNCTION__);
+  if (empty($list)) {
+    $list = module_invoke_all('taobao_api_info');
+  }
+  return $list;
+}
+
+/**
+ * Receive default params of system level.
+ */
+function taobao_sdk_api_info_default() {
+  return array(
+    'session' => array(
+      'generator callback' => 'taobao_sdk_session',
+    ),
+    'timestamp' => array(
+      'generator callback' => 'taobao_sdk_timestamp',
+    ),
+    'app_key' => array(
+      'generator callback' => 'taobao_sdk_app_key',
+    ),
+    'v' => '2.0',
+    'format' => 'json',
+    'sign_method' => 'md5',
+  );
+}
+
+function taobao_sdk_session($params = array()) {
+  // based TOP protocol authentication
+  $session = variable_get('taobao_sdk_session', NULL);
+  if ($session) {
+    return $session;
+  }
+  // goto auth process
+  //$url = 'http://container.api.tbsandbox.com/container?appkey=' . taobao_sdk_app_key();
+
+  $appkey = '';
+  if ($params['appkey']) {
+    $appkey = $params['appkey'];
+  }
+  else {
+    $appkey = taobao_sdk_app_key();
+  }
+  $url = 'http://container.api.taobao.com/container?appkey=' . $appkey;
+
+  $_SESSION['return_path'] = current_path();
+  drupal_goto($url);
+}
+
+function taobao_sdk_timestamp($params = array()) {
+  return date('Y-m-d H:i:s');
+}
+
+function taobao_sdk_app_key($params = array()) {
+  //return '1021688535';
+  //return '21689814';
+  return variable_get('taobao_sdk_appkey', '');
+}
+
+function taobao_sdk_app_secret() {
+  //return 'sandbox367a2c838f91e70e3578cfe3f';
+  //return 'a11ca24b8f780cc8f78b43be22511358';
+  return variable_get('taobao_sdk_appsecret', '');
+}
+
+/**
+ * Invoke specified API
+ */
+function taobao_sdk_api_invoke($apiname, $params) {
+  $info = taobao_sdk_api_info($apiname);
+
+  // initialize concrete request
+  $request = TaobaoSDKRequest::buildByInfo($info);
+  // set system level paramaters
+  $sys_params = taobao_sdk_api_info_default();
+
+  drupal_alter('taobao_sdk_system_params', $sys_params);
+
+  foreach ($sys_params as $name => $value) {
+    if (is_array($value)) {
+      $callback = $value['generator callback'];
+      $value = call_user_func_array($callback, array($params));
+    }
+    $request->setParameter($name, $value, 'system');
+  }
+  // set api method
+  $request->setParameter('method', $apiname);
+  // set params
+  foreach ($params as $name => $value) {
+    if (!empty($value)) {
+      $request->setParameter($name, $value, 'application');
+    }
+  }
+  //$request->setOption('method', 'POST');
+  // send request use drupal_http_request()
+  $response = drupal_http_request($request->getURL(), $request->getOptions());
+
+  $parser_classname = $info['parser'];
+  if (class_exists($parser_classname)) {
+    $parser = new $parser_classname($response->data);
+  }
+  else {
+    watchdog('taobao_sdk', 'parser class !classname is not defined', array('!classname' => $parser_classname), WATCHDOG_NOTICE);
+    return FALSE;
+  }
+  return $parser->result();
+}

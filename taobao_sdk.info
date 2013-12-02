@@ -1,0 +1,7 @@
+name = Taobao SDK
+description = taobao SDK for drupal modules.
+
+files[] = inc/taobao_sdk_request.inc
+files[] = inc/taobao_sdk_parser.inc
+
+core = 7.x

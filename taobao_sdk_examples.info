@@ -1,0 +1,7 @@
+name = Taobao SDK Examples
+description = "Examples of Taobao SDK use case"
+
+core = 7.x
+
+dependencies[] = taobao_sdk
+dependencies[] = devel

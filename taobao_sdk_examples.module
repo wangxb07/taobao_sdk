@@ -1,0 +1,188 @@
+<?php
+
+/**
+ * @file
+ */
+
+/**
+ * Implements hook_taobao_api_info()
+ */
+function taobao_sdk_examples_taobao_api_info() {
+  return array(
+    'taobao.item.get' => array(
+      'app_params' => array(
+        'fields' => array(
+          '#required' => TRUE,
+        ),
+        'num_iid' => array(
+          '#required' => TRUE,
+        ),
+        'track_iid' => array(
+          '#required' => FALSE,
+        )
+      ),
+      'parser' => 'TaobaoSDKJSONParser',
+    ),
+    'taobao.product.get' => array(
+      'app_params' => array(
+        'fields' => array(
+          '#required' => TRUE,
+        ),
+        'product_id' => array(
+          '#required' => TRUE,
+        ),
+        'cid' => array(
+          '#required' => FALSE,
+        ),
+        'props' => array(
+          '#required' => FALSE,
+        ),
+        'customer_props' => array(
+          '#required' => FALSE,
+        ),
+        'market_id' => array(
+          '#required' => FALSE,
+        ),
+      ),
+      'parser' => 'TaobaoSDKJSONParser',
+    ),
+    'taobao.logistics.companies.get' => array(
+      'app_params' => array(
+        'fields' => array(
+          '#required' => TRUE,
+        ),
+        'is_recommended' => array(
+          '#required' => FALSE,
+        ),
+        'order_mode' => array(
+          '#required' => FALSE,
+        ),
+      ),
+      'parser' => 'TaobaoSDKJSONParser',
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu()
+ */
+function taobao_sdk_examples_menu() {
+  $items = array();
+
+  $items['taobao_sdk_examples/form'] = array(
+    'title' => 'Taobao sdk examples: item get',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('taobao_sdk_examples_form'),
+    'access callback' => TRUE,
+  );
+
+  return $items;
+}
+
+/**
+ * item get examples form builder
+ */
+function taobao_sdk_examples_form($form, &$form_state) {
+  $form = array();
+
+  $form['apiname'] = array(
+    '#type' => 'textfield',
+    '#title' => t('API name'),
+    '#description' => t('API name what you need to test'),
+    '#required' => TRUE,
+  );
+
+  $form['fill_params_input'] = array(
+    '#type' => 'button',
+    '#ajax' => array(
+      'callback' => 'taobao_sdk_examples_fill_inputs_callback',
+      'wrapper' => 'params_fieldset_wrapper',
+    ),
+    '#value' => t('Fill inputs'),
+    '#validate' => array('taobao_sdk_examples_fillinput_validate'),
+  );
+
+  $form['params_fieldset'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Parameters'),
+    '#prefix' => '<div id="params_fieldset_wrapper">',
+    '#suffix' => '</div>',
+    '#description' => t('This is where we set the request parameters')
+  );
+
+  $form['params_str'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Parameters String'),
+    '#id' => 'params_str',
+    '#maxlength' => '1024'
+  );
+
+  $form['#attached']['js'] = array(
+    drupal_get_path('module', 'taobao_sdk_examples') . '/taobao_sdk_examples.js',
+  );
+
+  $form['submit'] = array('#type' => 'submit', '#value' => t('Submit'));
+  return $form;
+}
+
+function taobao_sdk_examples_fillinput_validate($form, &$form_state) {
+  $apiname = !empty($form_state['values']['apiname']) ? $form_state['values']['apiname']: '';
+  if (empty($apiname)) {
+    return FALSE;
+  }
+  if (!taobao_sdk_api_info($apiname)) {
+    drupal_set_message(t('!apiname not defined', array('!apiname' => $apiname)), 'error');
+    return FALSE;
+  }
+}
+
+function taobao_sdk_examples_form_validate($form, &$form_state) {
+  $apiname = !empty($form_state['values']['apiname']) ? $form_state['values']['apiname']: '';
+  if (empty($apiname)) {
+    return FALSE;
+  }
+  $info = taobao_sdk_api_info($apiname);
+  if (!$info) {
+    drupal_set_message(t('!apiname not defined', array('!apiname' => $apiname)), 'error');
+    return FALSE;
+  }
+  $params = drupal_get_query_array($form_state['values']['params_str']);
+  foreach ($info['app_params'] as $name => $param_info) {
+    if ($param_info['#required']) {
+      if (empty($params[$name])) {
+        drupal_set_message(t('API param "!name" is required', array('!name' => $name)), 'error');
+        return FALSE;
+      }
+    }
+  }
+}
+
+function taobao_sdk_examples_form_submit($form, $form_state) {
+  $params = drupal_get_query_array($form_state['values']['params_str']);
+  $apiname = $form_state['values']['apiname'];
+
+  $result = taobao_sdk_api_invoke($apiname, $params);
+  dpm($result);
+}
+
+/**
+ * select the portion of the form th be updated.
+ */
+function taobao_sdk_examples_fill_inputs_callback($form, $form_state) {
+  $element = $form['params_fieldset'];
+
+  $apiname = $form_state['values']['apiname'];
+  $info = taobao_sdk_api_info($apiname);
+  // fill all inputs
+  foreach ($info['app_params'] as $name => $param) {
+    $element[$name] = array(
+      '#name' => $name,
+      '#type' => 'textfield',
+      '#title' => $name,
+      '#required' => $param['#required'],
+    );
+    $element[$name]['#attributes']['class'] = array('request-params');
+  }
+
+  return $element;
+}
