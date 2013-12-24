@@ -17,6 +17,13 @@ function taobao_sdk_menu() {
     'access callback' => TRUE,
   );
 
+  $items['TaobaoLogin.aspx'] = array(
+    'title' => 'Taobao SDK callback',
+    'page callback' => 'taobao_sdk_callback',
+    'page arguments' => array(),
+    'access callback' => TRUE,
+  );
+
   $items['taobao_sdk/settings'] = array(
     'title' => 'Taobao SDK Settings',
     'page callback' => 'drupal_get_form',
@@ -130,7 +137,7 @@ function taobao_sdk_session($params = array()) {
   //$url = 'http://container.api.tbsandbox.com/container?appkey=' . taobao_sdk_app_key();
 
   $appkey = '';
-  if ($params['appkey']) {
+  if (isset($params['appkey'])) {
     $appkey = $params['appkey'];
   }
   else {
@@ -181,6 +188,7 @@ function taobao_sdk_api_invoke($apiname, $params) {
   // set api method
   $request->setParameter('method', $apiname);
   // set params
+  //TODO if post value is empty, use default value
   foreach ($params as $name => $value) {
     if (!empty($value)) {
       $request->setParameter($name, $value, 'application');
@@ -192,7 +200,13 @@ function taobao_sdk_api_invoke($apiname, $params) {
 
   $parser_classname = $info['parser'];
   if (class_exists($parser_classname)) {
-    $parser = new $parser_classname($response->data);
+    if (isset($response->data)) {
+      $parser = new $parser_classname($response->data);
+    }
+    else {
+      watchdog('taobao_sdk', 'response error @response', array('@response' => var_export($response, TRUE)), WATCHDOG_NOTICE);
+      return FALSE;
+    }
   }
   else {
     watchdog('taobao_sdk', 'parser class !classname is not defined', array('!classname' => $parser_classname), WATCHDOG_NOTICE);

@@ -60,6 +60,42 @@ function taobao_sdk_examples_taobao_api_info() {
       ),
       'parser' => 'TaobaoSDKJSONParser',
     ),
+    'taobao.itempropvalues.get' => array(
+      'app_params' => array(
+        'fields' => array(
+          '#required' => TRUE,
+          '#default' => 'cid,pid,prop_name,vid,name,name_alias,status,sort_order',
+        ),
+        'cid' => array(
+          '#required' => TRUE,
+        ),
+        'pvs' => array(
+          '#required' => TRUE,
+        ),
+        'type' => array(
+          '#required' => FALSE,
+        ),
+        'attr_keys' => array(
+          '#required' => FALSE,
+        ),
+      ),
+      'parser' => 'TaobaoSDKJSONParser',
+    ),
+    'taobao.itemcats.get' => array(
+      'app_params' => array(
+        'fields' => array(
+          '#required' => TRUE,
+          '#default' => 'cid,parent_cid,name,is_parent',
+        ),
+        'parent_cid' => array(
+          '#required' => FALSE,
+        ),
+        'cids' => array(
+          '#required' => TRUE,
+        ),
+      ),
+      'parser' => 'TaobaoSDKJSONParser',
+    ),
   );
 }
 
@@ -179,6 +215,7 @@ function taobao_sdk_examples_fill_inputs_callback($form, $form_state) {
       '#name' => $name,
       '#type' => 'textfield',
       '#title' => $name,
+      '#default_value' => $param['#default'],
       '#required' => $param['#required'],
     );
     $element[$name]['#attributes']['class'] = array('request-params');
